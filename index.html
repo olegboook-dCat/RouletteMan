@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1410">
+<title>Рулетка</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 30%, #3a2a1a 0%, #1a1410 70%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .stage {
+    position: relative;
+    width: min(88vw, 88vh, 480px);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Pointer at top */
+  .pointer {
+    position: absolute;
+    top: -2%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4.5vmin solid transparent;
+    border-right: 4.5vmin solid transparent;
+    border-top: 7vmin solid #f5c542;
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,.5));
+    z-index: 5;
+  }
+  .wheel-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    padding: 3.5%;
+    background: linear-gradient(145deg, #f5c542, #a87c1f);
+    box-shadow: 0 0 0 1.2vmin #2a1e12, 0 18px 40px rgba(0,0,0,.55);
+  }
+  .wheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transition: transform 5s cubic-bezier(.17,.67,.16,1);
+    display: block;
+  }
+  .emoji {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-size: 13vmin;
+    transform-origin: center;
+    pointer-events: none;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.4));
+  }
+  /* Center hub / spin button */
+  .hub {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22%;
+    height: 22%;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #fff, #d8d8d8);
+    box-shadow: 0 4px 10px rgba(0,0,0,.4), inset 0 -3px 6px rgba(0,0,0,.2);
+    z-index: 6;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8vmin;
+    transition: transform .1s;
+  }
+  .hub:active { transform: translate(-50%, -50%) scale(.92); }
+  .hub.spinning { cursor: default; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="pointer"></div>
+    <div class="wheel-wrap">
+      <svg class="wheel" id="wheel" viewBox="0 0 100 100" aria-hidden="true">
+        <!-- 3 sectors, 120° each -->
+        <path d="M50,50 L50,2 A48,48 0 0,1 91.57,74 Z" fill="#c0392b"/>
+        <path d="M50,50 L91.57,74 A48,48 0 0,1 8.43,74 Z" fill="#27546b"/>
+        <path d="M50,50 L8.43,74 A48,48 0 0,1 50,2 Z" fill="#b8860b"/>
+      </svg>
+      <!-- Emoji layer rotates together with the wheel -->
+      <div class="wheel" id="emojiLayer" style="position:absolute; top:0; left:0;">
+        <span class="emoji" data-a="0">🔫</span>
+        <span class="emoji" data-a="120">🍺</span>
+        <span class="emoji" data-a="240">🏍️</span>
+      </div>
+    </div>
+    <div class="hub" id="hub">🎲</div>
+  </div>
+
+<script>
+(function () {
+  const wheel = document.getElementById('wheel');
+  const emojiLayer = document.getElementById('emojiLayer');
+  const hub = document.getElementById('hub');
+
+  // Position emoji along a ring, each at the centre of its 120° sector.
+  const R = 32; // radius in viewBox units
+  document.querySelectorAll('.emoji').forEach(el => {
+    const a = (parseFloat(el.dataset.a) + 60) * Math.PI / 180; // sector centre
+    const x = 50 + R * Math.sin(a);
+    const y = 50 - R * Math.cos(a);
+    el.style.left = x + '%';
+    el.style.top = y + '%';
+    el.style.transform = 'translate(-50%, -50%)';
+  });
+
+  /* ---------- Audio (Web Audio API, no files) ---------- */
+  let AC = null;
+  function ctx() {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  }
+  function tick() {
+    const ac = ctx();
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = 'square';
+    o.frequency.value = 1100;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25, ac.currentTime + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.06);
+    o.connect(g).connect(ac.destination);
+    o.start();
+    o.stop(ac.currentTime + 0.07);
+  }
+  function ding() {
+    const ac = ctx();
+    [880, 1320, 1760].forEach((f, i) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      const t = ac.currentTime + i * 0.09;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g).connect(ac.destination);
+      o.start(t);
+      o.stop(t + 0.55);
+    });
+  }
+
+  /* ---------- Spin logic ---------- */
+  const DURATION = 5000; // must match CSS transition
+  let currentRot = 0;
+  let spinning = false;
+
+  // Schedule ticks that decelerate with the wheel (ease-out feel).
+  function scheduleTicks(totalTurns) {
+    const start = performance.now();
+    const ticksTotal = Math.round(totalTurns * 3); // one per sector edge
+    let done = 0;
+    function step(now) {
+      const p = Math.min((now - start) / DURATION, 1);
+      // eased progress (matches decelerating spin)
+      const eased = 1 - Math.pow(1 - p, 3);
+      const target = Math.floor(eased * ticksTotal);
+      while (done < target) { tick(); done++; }
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function spin() {
+    if (spinning) return;
+    spinning = true;
+    ctx(); // unlock audio on user gesture
+    hub.classList.add('spinning');
+
+    const turns = 5 + Math.floor(Math.random() * 3);      // 5–7 full turns
+    const extra = Math.floor(Math.random() * 360);        // random landing
+    currentRot += turns * 360 + extra;
+
+    wheel.style.transform = 'rotate(' + currentRot + 'deg)';
+    emojiLayer.style.transform = 'rotate(' + currentRot + 'deg)';
+
+    scheduleTicks(turns);
+
+    setTimeout(() => {
+      spinning = false;
+      hub.classList.remove('spinning');
+      ding();
+    }, DURATION);
+  }
+
+  hub.addEventListener('click', spin);
+})();
+</script>
+</body>
+</html>
