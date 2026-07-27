@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - claude/midlife-crisis-roulette-app-r6njm3
+      - main
   workflow_dispatch:
 
 permissions:
