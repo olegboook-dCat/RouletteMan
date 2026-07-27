@@ -112,7 +112,6 @@
 <body>
   <header>
     <h1>Кризис-Рулетка</h1>
-    <div class="subtitle">смахни, чтобы крутить</div>
   </header>
 
   <div class="stage">
@@ -263,11 +262,49 @@
   let vel = 0;              // deg per ms
   let dragging = false;
   let raf = null;
-  let center = null, lastA = 0, lastT = 0, lastPeg = 0;
+  let center = null, lastA = 0, lastT = 0, lastPeg = 0, lastTickPeg = 0;
   const PEG = 8;            // degrees between haptic ticks (smaller = more frequent)
+  const TICK_PEG = 24;      // degrees between sound ticks (sparser than haptics)
   const FRICTION = 0.9988;  // per-ms velocity decay
   const STOP = 0.0016;      // stop threshold (deg/ms)
   const MAXV = 2.2;         // clamp flick speed
+
+  /* ---------- sound (Web Audio API, no files) ---------- */
+  let AC = null;
+  function ctx() {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  }
+  function tick() {
+    const ac = ctx();
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = 'square';
+    o.frequency.value = 1100;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.22, ac.currentTime + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.06);
+    o.connect(g).connect(ac.destination);
+    o.start();
+    o.stop(ac.currentTime + 0.07);
+  }
+  function ding() {
+    const ac = ctx();
+    [880, 1320, 1760].forEach((f, i) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      const t = ac.currentTime + i * 0.09;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g).connect(ac.destination);
+      o.start(t);
+      o.stop(t + 0.55);
+    });
+  }
 
   function render() { wheel.style.transform = 'rotate(' + angle + 'deg)'; }
   render();
@@ -275,6 +312,8 @@
   function buzz() {
     const peg = Math.round(angle / PEG);
     if (peg !== lastPeg) { lastPeg = peg; if (navigator.vibrate) navigator.vibrate(16); }
+    const tp = Math.round(angle / TICK_PEG);
+    if (tp !== lastTickPeg) { lastTickPeg = tp; tick(); }
   }
   function centreXY() {
     const r = wheel.getBoundingClientRect();
@@ -287,6 +326,7 @@
 
   wheel.addEventListener('pointerdown', e => {
     e.preventDefault();
+    ctx();                    // unlock audio on the user gesture
     if (raf) { cancelAnimationFrame(raf); raf = null; }
     dragging = true; vel = 0;
     wheel.classList.add('grabbing');
@@ -327,6 +367,7 @@
   wheel.addEventListener('pointercancel', release);
 
   function finish() {
+    ding();
     if (navigator.vibrate) navigator.vibrate([45, 55, 75, 55, 90]);
   }
 })();
