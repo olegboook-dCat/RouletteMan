@@ -264,7 +264,7 @@
   let dragging = false;
   let raf = null;
   let center = null, lastA = 0, lastT = 0, lastPeg = 0;
-  const PEG = 12;           // degrees between haptic ticks
+  const PEG = 8;            // degrees between haptic ticks (smaller = more frequent)
   const FRICTION = 0.9988;  // per-ms velocity decay
   const STOP = 0.0016;      // stop threshold (deg/ms)
   const MAXV = 2.2;         // clamp flick speed
@@ -274,7 +274,7 @@
 
   function buzz() {
     const peg = Math.round(angle / PEG);
-    if (peg !== lastPeg) { lastPeg = peg; if (navigator.vibrate) navigator.vibrate(7); }
+    if (peg !== lastPeg) { lastPeg = peg; if (navigator.vibrate) navigator.vibrate(16); }
   }
   function centreXY() {
     const r = wheel.getBoundingClientRect();
@@ -327,7 +327,7 @@
   wheel.addEventListener('pointercancel', release);
 
   function finish() {
-    if (navigator.vibrate) navigator.vibrate([28, 40, 55]);
+    if (navigator.vibrate) navigator.vibrate([45, 55, 75, 55, 90]);
   }
 })();
 </script>
