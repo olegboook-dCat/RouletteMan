@@ -270,11 +270,45 @@
   const MAXV = 2.2;         // clamp flick speed
 
   /* ---------- sound (Web Audio API, no files) ---------- */
-  let AC = null;
+  let AC = null, unlocked = false;
   function ctx() {
     if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
     if (AC.state === 'suspended') AC.resume();
     return AC;
+  }
+  // Build a tiny silent WAV in memory (no external files).
+  function silentWavURL() {
+    const sr = 8000, n = 2000;               // ~0.25s of silence
+    const buf = new ArrayBuffer(44 + n * 2);
+    const dv = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    w(36, 'data'); dv.setUint32(40, n * 2, true);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+  // Must run inside a user gesture. Unlocks Web Audio and, on iOS,
+  // keeps a silent media element playing so sound is audible even with
+  // the ring/silent switch on.
+  function unlockAudio() {
+    const ac = ctx();
+    if (unlocked) return;
+    unlocked = true;
+    try {
+      const s = ac.createBufferSource();
+      s.buffer = ac.createBuffer(1, 1, 22050);
+      s.connect(ac.destination); s.start(0);
+    } catch (_) {}
+    try {
+      const a = document.createElement('audio');
+      a.loop = true; a.preload = 'auto';
+      a.setAttribute('playsinline', '');
+      a.src = silentWavURL();
+      const ms = ac.createMediaElementSource(a);
+      ms.connect(ac.destination);
+      a.play().catch(function () {});
+    } catch (_) {}
   }
   function tick() {
     const ac = ctx();
@@ -326,7 +360,7 @@
 
   wheel.addEventListener('pointerdown', e => {
     e.preventDefault();
-    ctx();                    // unlock audio on the user gesture
+    unlockAudio();            // unlock audio on the user gesture (incl. iOS silent mode)
     if (raf) { cancelAnimationFrame(raf); raf = null; }
     dragging = true; vel = 0;
     wheel.classList.add('grabbing');
